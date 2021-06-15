@@ -17,19 +17,17 @@ const main = async (searchTerm) => {
     const relatedHtml = $('.srp-related-searches').html();
     const $related = cheerio.load(relatedHtml)
     const links = $related('a').toArray().map((x) => $(x).text());
-    console.log(links);
-    // const imageUrls = $('img')
-    //     .map((i, link) => link.attribs.src)
-    //     .get()
-    // imageUrls.forEach((imageUrl, i) => {
-    //     fetch(imageUrl).then(response => {
-    //         const filename = path.basename(imageUrl)
-    //         const dest = fs.createWriteStream(`images/${i+filename}`)
-    //         response.body.pipe(dest)
-    //         console.log('finish', filename, i)
-    //     });
+    const itemsHtml = $('ul').get();
+    const $items = cheerio.load(itemsHtml);
+    // const items = $items('li').map((i, item) => {
+    //     const itemHtml = $(item).html();
+    //     const $item = cheerio.load(itemHtml);
+    //     const desc = $item('.s-item__title').text();
     // });
-    // return links.forEach(link => main(link));
+    const items = $items('li').toArray().map((item, i) => {
+        if (i<5) console.log(item);
+    });
+    //console.log(items);
 }
 
 main('running+shoes')
