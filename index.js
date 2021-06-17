@@ -8,7 +8,6 @@ const BASE_URL = 'https://www.ebay.com/sch/i.html?_nkw=';
 const SEEN_URLS = {};
 
 const itemSelector = '#srp-river-results > ul > li';
-const sponsoredSelector = '#srp-river-results > ul > li > div > div.s-item__info.clearfix > div.s-item__details.clearfix > div > span'
 
 const isSponsered = (str) => {
     let i = 0;
@@ -33,20 +32,28 @@ const main = async (searchTerm) => {
     const $related = cheerio.load(relatedHtml)
     const links = $related('a').toArray().map((x) => $(x).text());
     const itemsHtml = $('.srp-results').html();
-    //const $items = cheerio.load(itemsHtml);
-    // const items = $items('li.s-item').map((i,el) => {
-    //     const item = $items(el);
-    //     const title = item.find('.s-item__title').text();
-    //     console.log($items('span.s-z7hjza3').get())
-    //     const price = item.find('.s-item__price').text();
-    //     const sponsoredHtml = item.find('span.s-item__sep').text();
-    // });
-    $(itemSelector).each((i, el) => {
-        const $item = cheerio.load($(el).html());
-        const span = $item('span.s-item__sep')
+    const $items = cheerio.load(itemsHtml);
+    const items = $items('li.s-item').map((i, el) => {
+        const item = $items(el);
+        const title = item.find('.s-item__title').text();
+        const price = item.find('.s-item__price').text();
+        let sponsored = false;
+        let changebleClass = '';
+        item.find('span.s-item__sep')
             .children()
-            .each((index, element) => console.log($(element).css()));
-    })
+            .children()
+            .each((i, el) => {
+                if (i === 0) return changebleClass=el.attribs.class;
+                if (el.attribs.class !== changebleClass) sponsored = true;
+            });
+        console.log(sponsored, price, title);
+    });
+    // $(itemSelector).each((i, el) => {
+    //     const $item = cheerio.load($(el).html());
+    //     const span = $item('span.s-item__sep')
+    //         .children()
+    //         .each((index, element) => console.log($(element).css()));
+    // })
 }
 
 main('running+shoes')
