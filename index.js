@@ -1,59 +1,74 @@
 const cheerio = require('cheerio');
-const fetch = require('node-fetch');
-const fs = require('fs');
-const path = require('path');
+const axios = require('axios');
 
-const BASE_URL = 'https://www.ebay.com/sch/i.html?_nkw=';
+const BASE_URL = (searchTerm, page) => `https://www.ebay.com/sch/i.html?_nkw=${searchTerm}&_pgn=${page}&rt=nc`;
 
-const SEEN_URLS = {};
+const RELATED_SELECTOR = '.srp-related-searches';
+const ITEM_SELECTOR = 'li.s-item';
+const SPONSORED_SELECTOR = 'span.s-item__sep';
+const TITLE_SELECTOR = '.s-item__title';
+const PRICE_SELECTOR = '.s-item__price';
+const SHIPPING_SELECTOR = '.s-item__shipping';
+const LOCATION_SELECTOR = '.s-item__location';
+const IMAGE_SELECTOR = '.s-item__image-img';
 
-const itemSelector = '#srp-river-results > ul > li';
 
-const isSponsered = (str) => {
-    let i = 0;
-    const sponsoredWord = 'sponsored'.split('');
-    const splitStr = str.toLowerCase().split('');
-    splitStr.forEach(char => {
-        if (char === sponsoredWord[i]) {
-            i++;
-        }
-    });
-    return i >= sponsoredWord.length;
+const isSponsered = (item) => {
+    let sponsored = false;
+    let changebleClass = '';
+    item.find(SPONSORED_SELECTOR)
+        .children()
+        .children()
+        .each((i, el) => {
+            if (i === 0) return changebleClass = el.attribs.class;
+            if (el.attribs.class !== changebleClass) sponsored = true;
+        });
+    return sponsored;
 }
-
-const main = async (searchTerm) => {
-    const url = searchTerm.includes('http') ? searchTerm : BASE_URL + searchTerm;
-    if (SEEN_URLS[url] || Object.keys(SEEN_URLS).length > 20) return;
-    SEEN_URLS[url] = true;
-    const response = await fetch(url);
-    const html = await response.text();
-    const $ = cheerio.load(html);
-    const relatedHtml = $('.srp-related-searches').html();
+const getRelatedItems = ($) => {
+    const relatedHtml = $(RELATED_SELECTOR).html();
+    if (typeof relatedHtml !== 'string') return [];
     const $related = cheerio.load(relatedHtml)
-    const links = $related('a').toArray().map((x) => $(x).text());
-    const itemsHtml = $('.srp-results').html();
-    const $items = cheerio.load(itemsHtml);
-    const items = $items('li.s-item').map((i, el) => {
-        const item = $items(el);
-        const title = item.find('.s-item__title').text();
-        const price = item.find('.s-item__price').text();
-        let sponsored = false;
-        let changebleClass = '';
-        item.find('span.s-item__sep')
-            .children()
-            .children()
-            .each((i, el) => {
-                if (i === 0) return changebleClass=el.attribs.class;
-                if (el.attribs.class !== changebleClass) sponsored = true;
-            });
-        console.log(sponsored, price, title);
+    return $related('a').toArray().map((x) => $(x).text());
+}
+const getItemsFromPage = ($) => {
+    return $(ITEM_SELECTOR).toArray().map((el, i) => {
+        const item = $(el);
+        const Position = i;
+        const Title = item.find(TITLE_SELECTOR).text();
+        const Price = item.find(PRICE_SELECTOR).text();
+        if (!Title || !Price) return;
+        const Shipping = item.find(SHIPPING_SELECTOR).text();
+        const ShipsFrom = item.find(LOCATION_SELECTOR).text();
+        const img = item.find(IMAGE_SELECTOR).get();
+        const Image = img[0]?.attribs?.src
+        const Sponsored = isSponsered(item);
+        return ({
+            Position,
+            Title,
+            Price,
+            Sponsored,
+            Shipping,
+            ShipsFrom,
+            Image
+        });
     });
-    // $(itemSelector).each((i, el) => {
-    //     const $item = cheerio.load($(el).html());
-    //     const span = $item('span.s-item__sep')
-    //         .children()
-    //         .each((index, element) => console.log($(element).css()));
-    // })
 }
 
-main('running+shoes')
+const main = async (searchTerm, page) => {
+    const url = searchTerm.includes('http') ? searchTerm : BASE_URL(searchTerm, page);
+    const response = await axios.get(url);
+    if (!response || !response.data) return;
+    const $ = cheerio.load(response.data);
+    const relatedItems = getRelatedItems($)
+    const items = getItemsFromPage($);
+    const fixItems = items.filter(item => item);
+    return {relatedItems, fixItems};
+}
+
+const first = BASE_URL('running+shoes', 4);
+const second = BASE_URL('running+shoes', 5);
+
+axios.get(first).then(res => console.log(res.data));
+
+
