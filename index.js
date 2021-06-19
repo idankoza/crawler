@@ -1,7 +1,7 @@
 const cheerio = require('cheerio');
-const axios = require('axios');
+const puppeteer = require('puppeteer');
 
-const BASE_URL = (searchTerm, page) => `https://www.ebay.com/sch/i.html?_nkw=${searchTerm}&_pgn=${page}&rt=nc`;
+const BASE_URL = (searchTerm) => `https://www.ebay.com/sch/i.html?_nkw=${searchTerm}`;
 
 const RELATED_SELECTOR = '.srp-related-searches';
 const ITEM_SELECTOR = 'li.s-item';
@@ -11,6 +11,34 @@ const PRICE_SELECTOR = '.s-item__price';
 const SHIPPING_SELECTOR = '.s-item__shipping';
 const LOCATION_SELECTOR = '.s-item__location';
 const IMAGE_SELECTOR = '.s-item__image-img';
+const NEXT_PAGE_SELECTOR = '.pagination__next';
+const PAGING_ITEMS_SELECTOR = '.pagination__items'
+
+const getRenderedHtml = async (url) => {
+    const browser = await puppeteer.launch({
+        headless: false,
+    });
+    const [page] = await browser.pages();
+    await page.goto(url);
+    const pages = [];
+    const seenUrl = {};
+    let currentUrl = page.url();
+    while (!seenUrl[currentUrl]) {
+        try {
+            seenUrl[currentUrl] = true;
+            const currentPage = await page.evaluate(() => document.querySelector('*').outerHTML);
+            pages.push(currentPage);
+            await page.click(NEXT_PAGE_SELECTOR);
+            await page.waitForSelector(PAGING_ITEMS_SELECTOR);
+            currentUrl = page.url();
+        }
+        catch {
+            return { success: true, data: pages };
+        }
+    }
+    await browser.close();
+    return { success: true, data: pages };
+}
 
 
 const isSponsered = (item) => {
@@ -34,7 +62,6 @@ const getRelatedItems = ($) => {
 const getItemsFromPage = ($) => {
     return $(ITEM_SELECTOR).toArray().map((el, i) => {
         const item = $(el);
-        const Position = i;
         const Title = item.find(TITLE_SELECTOR).text();
         const Price = item.find(PRICE_SELECTOR).text();
         if (!Title || !Price) return;
@@ -44,7 +71,6 @@ const getItemsFromPage = ($) => {
         const Image = img[0]?.attribs?.src
         const Sponsored = isSponsered(item);
         return ({
-            Position,
             Title,
             Price,
             Sponsored,
@@ -54,21 +80,36 @@ const getItemsFromPage = ($) => {
         });
     });
 }
-
-const main = async (searchTerm, page) => {
-    const url = searchTerm.includes('http') ? searchTerm : BASE_URL(searchTerm, page);
-    const response = await axios.get(url);
-    if (!response || !response.data) return;
-    const $ = cheerio.load(response.data);
-    const relatedItems = getRelatedItems($)
+const handlePage = (page, i) => {
+    const $ = cheerio.load(page);
+    const relatedItems = i === 0 && getRelatedItems($);
     const items = getItemsFromPage($);
     const fixItems = items.filter(item => item);
-    return {relatedItems, fixItems};
+    return { fixItems, relatedItems };
 }
 
-const first = BASE_URL('running+shoes', 4);
-const second = BASE_URL('running+shoes', 5);
+const main = async (searchTerm) => {
+    const url = searchTerm.includes('http') ? searchTerm : BASE_URL(searchTerm);
+    const response = await getRenderedHtml(url)
+        .catch((err) => console.log(err));
+    if (!response?.success) return console.log(response.err);
+    const results = response.data.map((page, i) => handlePage(page, i));
+    const allItems = results.reduce((all, curPageResult) => [...all, ...curPageResult.fixItems], []);
+    const fixAllItems = allItems.map((item, i) => ({
+        ...item,
+        position: i + 1
+    }));
+    const relatedItems = results[0].relatedItems;
+    return { relatedItems, fixAllItems };
+}
 
-axios.get(first).then(res => console.log(res.data));
+main('haircut+machine').then(res => {
+    const { relatedItems, fixAllItems } = res;
+    console.log(relatedItems);
+    console.table(fixAllItems);
+})
+
+
+
 
 
