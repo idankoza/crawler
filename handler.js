@@ -1,5 +1,3 @@
-const cheerio = require('cheerio');
-
 const handler = {};
 
 const ITEM_BASE_URL = 'https://www.ebay.com/itm/';
@@ -82,10 +80,10 @@ handler.getItemsFromPage = $ => {
 }
 
 handler.getRelatedSearch = ($) => {
-    const relatedHtml = $(RELATED_SELECTOR).html();
-    if (typeof relatedHtml !== 'string') return null;
-    const $related = cheerio.load(relatedHtml)
-    return $related('a').toArray().map((x) => $(x).text());
+    return $(RELATED_SELECTOR)
+        .find('a')
+        .map((i, el) => $(el).text())
+        .get();
 }
 
 module.exports = handler;

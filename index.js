@@ -35,7 +35,7 @@ prompt.get(['Search Term'], (err, result) => {
     crwal(searchTerm).then(res => {
         if (!res) return console.log('Failed to get data');
         const { Related, Items } = res;
-        console.log(Related, Items);
+        console.log(Related, Items.slice(0,4));
     });
 })
 
